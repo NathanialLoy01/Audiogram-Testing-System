@@ -1,0 +1,544 @@
+% AudiogramTest.m 
+% Includes:
+% - Eligibility screening (<=20 dB)
+% - Group classification (Normal < 10 dB, Adjusted >= 10 dB)
+% - Calibration system (determine starting boost level)
+% - Audiogram gain reduction for Adjusted users
+
+clear; clc; close all;
+
+Project_Dir = ATS_getProjectDir();
+
+%%% Standard audiogram frequencies ***
+Audiogram_Frequencies = [125, 250, 500, 1000, 2000, 4000, 8000];
+Freq_Display_Labels = {'125 Hz', '250 Hz', '500 Hz', '1 kHz', '2 kHz', '4 kHz', '8 kHz'};
+Audiogram_URL = 'https://www.nhs.uk/conditions/hearing-tests/';
+
+% FIGURE
+Fig_W = 580;
+Fig_H = 500;
+Main_Fig = uifigure('Name', 'Critical Listening Trainer: Hearing Setup', ...
+    'Position', [300, 110, Fig_W, Fig_H], 'Color', [0.96, 0.96, 0.96]);
+
+% PAGE 1 - NAME ENTRY
+P1 = uipanel(Main_Fig, 'Position', [0, 0, Fig_W, Fig_H], ...
+    'BorderType', 'none', 'BackgroundColor', [0.96, 0.96, 0.96]);
+
+uilabel(P1, 'Text', 'Critical Listening Trainer', ...
+    'Position', [20, 438, 540, 32], 'FontSize', 18, 'FontWeight', 'bold', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.1, 0.1, 0.1]);    
+uilabel(P1, 'Text', 'Hearing Setup', ...
+    'Position', [20, 408, 540, 24], 'FontSize', 13, ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.2, 0.2, 0.2]);    
+uipanel(P1, 'Position', [50, 398, 480, 2], 'BorderType', 'none', ...
+    'BackgroundColor', [0.72, 0.72, 0.72]);
+
+Name_Field = uieditfield(P1, 'text', ...
+    'Position', [175, 345, 230, 30], 'FontSize', 12, ...
+    'Placeholder', 'Enter your name...', ...
+    'ValueChangedFcn', @(src, evt) onNameChanged(Main_Fig));
+uilabel(P1, 'Text', 'Your Name', ...
+    'Position', [175, 370, 100, 20], 'FontSize', 11, 'FontWeight', 'bold', ...
+    'FontColor', [0.15, 0.15, 0.15]);    
+
+uipanel(P1, 'Position', [50, 330, 480, 1], 'BorderType', 'none', ...
+    'BackgroundColor', [0.80, 0.80, 0.80]);
+
+uilabel(P1, 'Text', 'Have you had an audiogram performed?', ...
+    'Position', [20, 282, 540, 36], 'FontSize', 14, 'FontWeight', 'bold', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.15, 0.15, 0.15]);    
+uilabel(P1, 'Text', 'An audiogram measures your hearing thresholds at key frequencies across the audible range.', ...
+    'Position', [40, 252, 500, 28], 'FontSize', 10, 'WordWrap', 'on', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.25, 0.25, 0.25]);    
+uilabel(P1, 'Text', 'Entering your results allows the trainer to apply personalised frequency correction.', ...
+    'Position', [40, 228, 500, 22], 'FontSize', 10, 'WordWrap', 'on', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.25, 0.25, 0.25]);    
+
+Yes_Btn = uibutton(P1, 'Text', 'Yes - I have my audiogram results', ...
+    'Position', [55, 165, 210, 48], 'FontSize', 12, 'FontWeight', 'bold', ...
+    'BackgroundColor', [0.14, 0.50, 0.22], 'FontColor', [1, 1, 1], ...
+    'Enable', 'off', 'ButtonPushedFcn', @(src, evt) showEligibilityPage(Main_Fig));
+
+No_Btn = uibutton(P1, 'Text', 'No  -  I have not had one yet', ...
+    'Position', [315, 165, 210, 48], 'FontSize', 12, 'FontWeight', 'bold', ...
+    'BackgroundColor', [0.16, 0.36, 0.62], 'FontColor', [1, 1, 1], ...
+    'Enable', 'off', 'ButtonPushedFcn', @(src, evt) showNoPanel(Main_Fig));
+
+Name_Hint = uilabel(P1, 'Text', 'Please enter your name above to continue.', ...
+    'Position', [20, 145, 540, 18], 'FontSize', 10, ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.60, 0.45, 0.10]);
+
+No_Panel = uipanel(P1, 'Position', [28, 14, 524, 118], ...
+    'BorderType', 'line', 'HighlightColor', [0.65, 0.75, 0.92], ...
+    'BackgroundColor', [0.92, 0.95, 1.0], 'Visible', 'off');
+
+uilabel(No_Panel, ...
+    'Text', 'If you would like auditory correction assistance, we recommend completing a free online hearing test before continuing. This allows the trainer to compensate for frequency-specific hearing loss.', ...
+    'Position', [12, 76, 500, 36], 'FontSize', 10, 'WordWrap', 'on', ...
+    'FontColor', [0.12, 0.12, 0.12]);
+uilabel(No_Panel, 'Text', 'Recommended: NHS Online Hearing Test (free, clinically referenced)', ...
+    'Position', [12, 56, 500, 18], 'FontSize', 10, 'FontWeight', 'bold', ...
+    'FontColor', [0.15, 0.15, 0.15]);  % Dark  
+uilabel(No_Panel, 'Text', Audiogram_URL, ...
+    'Position', [12, 38, 370, 16], 'FontSize', 10, ...
+    'FontColor', [0.08, 0.18, 0.75], 'FontAngle', 'italic');
+uibutton(No_Panel, 'Text', 'Open Link', ...
+    'Position', [390, 34, 112, 24], 'FontSize', 9, ...
+    'ButtonPushedFcn', @(src, evt) web(Audiogram_URL, '-browser'));
+uipanel(No_Panel, 'Position', [10, 30, 504, 1], 'BorderType', 'none', ...
+    'BackgroundColor', [0.72, 0.80, 0.95]);
+uibutton(No_Panel, 'Text', 'Next  -  Enter My Values', ...
+    'Position', [12, 6, 188, 26], 'FontSize', 10, 'FontWeight', 'bold', ...
+    'ButtonPushedFcn', @(src, evt) showEligibilityPage(Main_Fig));
+uibutton(No_Panel, 'Text', 'Skip  - Go to Trainer', ...
+    'Position', [214, 6, 168, 26], 'FontSize', 10, ...
+    'FontColor', [0.3, 0.3, 0.3], ...  % Darker  
+    'ButtonPushedFcn', @(src, evt) launchMainProgram(Main_Fig));
+
+% PAGE 1.5 - ELIGIBILITY INFO
+P1_5 = uipanel(Main_Fig, 'Position', [0, 0, Fig_W, Fig_H], ...
+    'BorderType', 'none', 'BackgroundColor', [0.96, 0.96, 0.96], 'Visible', 'off');
+
+uilabel(P1_5, 'Text', 'Study Eligibility Requirements', ...
+    'Position', [20, 438, 540, 32], 'FontSize', 18, 'FontWeight', 'bold', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.1, 0.1, 0.1]);  % Dark  
+
+Req_Panel = uipanel(P1_5, 'Position', [40, 260, 500, 160], ...
+    'Title', 'Inclusion Criteria', 'FontSize', 13, 'FontWeight', 'bold', ...
+    'BackgroundColor', [0.95, 0.95, 1.0], 'ForegroundColor', [0.1, 0.1, 0.1]);  % Dark
+
+uilabel(Req_Panel, ...
+    'Text', sprintf(['This study focuses on MILD hearing loss only.\n\n' ...
+    'ALL audiogram frequencies must be <=20 dB HL\n' ...
+    '   (125, 250, 500, 1000, 2000, 4000, 8000 Hz)\n\n' ...
+    'If ANY frequency exceeds 20 dB, you will NOT be eligible\n\n' ...
+    'Why? We are studying auditory discrimination ability\n' ...
+    'through progressive training with adaptive compensation.']), ...
+    'Position', [15, 10, 470, 130], 'FontSize', 10, 'WordWrap', 'on', ...
+    'FontColor', [0.2, 0.2, 0.2]);    
+
+Warn_Panel = uipanel(P1_5, 'Position', [40, 140, 500, 100], ...
+    'Title', 'Before You Continue', 'FontSize', 12, 'FontWeight', 'bold', ...
+    'BackgroundColor', [1, 1, 0.9], 'ForegroundColor', [0.1, 0.1, 0.1]);  % Dark
+
+uilabel(Warn_Panel, ...
+    'Text', sprintf(['Please have your recent audiogram ready.\n\n' ...
+    'Enter 0 for normal hearing at any frequency.\n' ...
+    'Values above 20 dB will not be eligible.']), ...
+    'Position', [15, 10, 470, 65], 'FontSize', 10, 'WordWrap', 'on', ...
+    'FontColor', [0.2, 0.2, 0.2]);    
+
+uibutton(P1_5, 'Text', 'I Understand - Continue to Audiogram Entry', ...
+    'Position', [140, 80, 300, 40], 'FontSize', 12, 'FontWeight', 'bold', ...
+    'BackgroundColor', [0.14, 0.50, 0.22], 'FontColor', [1, 1, 1], ...
+    'ButtonPushedFcn', @(src, evt) showPage2(Main_Fig));
+
+uibutton(P1_5, 'Text', '<- Back', ...
+    'Position', [18, 14, 82, 26], 'FontSize', 10, ...
+    'FontColor', [0.3, 0.3, 0.3], ...  % Darker  
+    'ButtonPushedFcn', @(src, evt) showPage1(Main_Fig));
+
+% PAGE 2 - AUDIOGRAM ENTRY
+P2 = uipanel(Main_Fig, 'Position', [0, 0, Fig_W, Fig_H], ...
+    'BorderType', 'none', 'BackgroundColor', [0.96, 0.96, 0.96], 'Visible', 'off');
+
+uilabel(P2, 'Text', 'Enter Your Audiogram Values', ...
+    'Position', [20, 444, 540, 30], 'FontSize', 16, 'FontWeight', 'bold', ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.1, 0.1, 0.1]);  % Dark  
+uilabel(P2, 'Text', 'Enter your hearing threshold level (dB HL) for each frequency below.', ...
+    'Position', [20, 416, 540, 22], 'FontSize', 11, ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.25, 0.25, 0.25]);    
+uilabel(P2, 'Text', 'Study Requirement: All values must be <=20 dB HL (Enter 0 for normal hearing)', ...
+    'Position', [30, 394, 520, 20], 'FontSize', 10, ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.65, 0.16, 0.16], 'FontWeight', 'bold');
+uipanel(P2, 'Position', [50, 384, 480, 2], 'BorderType', 'none', ...
+    'BackgroundColor', [0.72, 0.72, 0.72]);
+
+Field_W = 70;
+Field_H = 34;
+Gap = 14;
+
+R1_Count = 4;
+R1_Y = 295;
+R1_X0 = (Fig_W - R1_Count * Field_W - (R1_Count - 1) * Gap) / 2;
+
+R2_Count = 3;
+R2_Y = 200;
+R2_X0 = (Fig_W - R2_Count * Field_W - (R2_Count - 1) * Gap) / 2;
+
+Freq_Fields = cell(1, 7);
+Freq_Indicators = cell(1, 7);
+
+for i = 1:R1_Count
+    Fx = R1_X0 + (i - 1) * (Field_W + Gap);
+    uilabel(P2, 'Text', Freq_Display_Labels{i}, ...
+        'Position', [Fx, R1_Y + Field_H + 3, Field_W, 18], ...
+        'FontSize', 10, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+        'FontColor', [0.3, 0.3, 0.3]);    
+    Freq_Fields{i} = uieditfield(P2, 'numeric', ...
+        'Position', [Fx, R1_Y, Field_W, Field_H], ...
+        'Limits', [0, 120], 'LowerLimitInclusive', 'on', 'UpperLimitInclusive', 'on', ...
+        'HorizontalAlignment', 'center', 'FontSize', 12, ...
+        'ValueDisplayFormat', '%.0f', ...
+        'Tag', sprintf('Hz_%d_Field', Audiogram_Frequencies(i)), ...
+        'ValueChangedFcn', @(src, evt) validateAndCheckAll(Main_Fig, src, Freq_Display_Labels{i}));
+    
+    Freq_Indicators{i} = uilabel(P2, 'Text', '', ...
+        'Position', [Fx + Field_W + 2, R1_Y + 5, 24, 24], ...
+        'FontSize', 16, 'HorizontalAlignment', 'center');
+    
+    uilabel(P2, 'Text', 'dB HL', ...
+        'Position', [Fx, R1_Y - 17, Field_W, 14], ...
+        'FontSize', 9, 'FontColor', [0.35, 0.35, 0.35], 'HorizontalAlignment', 'center');  % Darker  
+end
+
+for j = 1:R2_Count
+    i = 4 + j;
+    Fx = R2_X0 + (j - 1) * (Field_W + Gap);
+    uilabel(P2, 'Text', Freq_Display_Labels{i}, ...
+        'Position', [Fx, R2_Y + Field_H + 3, Field_W, 18], ...
+        'FontSize', 10, 'FontWeight', 'bold', 'HorizontalAlignment', 'center', ...
+        'FontColor', [0.3, 0.3, 0.3]);    
+    Freq_Fields{i} = uieditfield(P2, 'numeric', ...
+        'Position', [Fx, R2_Y, Field_W, Field_H], ...
+        'Limits', [0, 120], 'LowerLimitInclusive', 'on', 'UpperLimitInclusive', 'on', ...
+        'HorizontalAlignment', 'center', 'FontSize', 12, ...
+        'ValueDisplayFormat', '%.0f', ...
+        'Tag', sprintf('Hz_%d_Field', Audiogram_Frequencies(i)), ...
+        'ValueChangedFcn', @(src, evt) validateAndCheckAll(Main_Fig, src, Freq_Display_Labels{i}));
+    
+    Freq_Indicators{i} = uilabel(P2, 'Text', '', ...
+        'Position', [Fx + Field_W + 2, R2_Y + 5, 24, 24], ...
+        'FontSize', 16, 'HorizontalAlignment', 'center');
+    
+    uilabel(P2, 'Text', 'dB HL', ...
+        'Position', [Fx, R2_Y - 17, Field_W, 14], ...
+        'FontSize', 9, 'FontColor', [0.35, 0.35, 0.35], 'HorizontalAlignment', 'center');  % Darker  
+end
+
+Validation_Note = uilabel(P2, ...
+    'Text', 'Empty fields will be treated as 0 dB (normal hearing). Next is enabled.', ...
+    'Position', [20, 158, 540, 20], 'FontSize', 10, ...
+    'HorizontalAlignment', 'center', 'FontColor', [0.3, 0.3, 0.3]);    
+
+Next_Btn = uibutton(P2, 'Text', 'Next  - Start Calibration', ...
+    'Position', [190, 118, 200, 38], 'FontSize', 13, 'FontWeight', 'bold', ...
+    'Enable', 'on', 'BackgroundColor', [0.14, 0.50, 0.22], 'FontColor', [1, 1, 1], ...  % Enabled by default
+    'ButtonPushedFcn', @(src, evt) collectAndLaunch(Main_Fig));
+
+uibutton(P2, 'Text', 'Back', ...
+    'Position', [18, 14, 82, 26], 'FontSize', 10, ...
+    'FontColor', [0.3, 0.3, 0.3], ...  % Darker  
+    'ButtonPushedFcn', @(src, evt) showEligibilityPage(Main_Fig));
+
+% Store all handles
+Main_Fig.UserData.P1 = P1;
+Main_Fig.UserData.P1_5 = P1_5;
+Main_Fig.UserData.P2 = P2;
+Main_Fig.UserData.No_Panel = No_Panel;
+Main_Fig.UserData.Name_Field = Name_Field;
+Main_Fig.UserData.Yes_Btn = Yes_Btn;
+Main_Fig.UserData.No_Btn = No_Btn;
+Main_Fig.UserData.Name_Hint = Name_Hint;
+Main_Fig.UserData.Freq_Fields = Freq_Fields;
+Main_Fig.UserData.Freq_Indicators = Freq_Indicators;
+Main_Fig.UserData.Next_Btn = Next_Btn;
+Main_Fig.UserData.Validation_Note = Validation_Note;
+Main_Fig.UserData.Audiogram_Frequencies = Audiogram_Frequencies;
+Main_Fig.UserData.Fields_Filled = true(1, 7);
+Main_Fig.UserData.Fields_Valid = true(1, 7);
+Main_Fig.UserData.warned_fields = struct();
+Main_Fig.UserData.Project_Dir = Project_Dir;
+
+waitfor(Main_Fig);
+
+% CALLBACKS
+function onNameChanged(Fig)
+    D = Fig.UserData;
+    Name = strtrim(D.Name_Field.Value);
+    if ~isempty(Name)
+        D.Yes_Btn.Enable = 'on';
+        D.No_Btn.Enable = 'on';
+        D.Name_Hint.Text = '';
+        Fig.Name = sprintf('Critical Listening Trainer:  %s', Name);
+    else
+        D.Yes_Btn.Enable = 'off';
+        D.No_Btn.Enable = 'off';
+        D.Name_Hint.Text = 'Please enter your name above to continue.';
+        Fig.Name = 'Critical Listening Trainer: Hearing Setup';
+    end
+    Fig.UserData = D;
+end
+
+function showNoPanel(Fig)
+    D = Fig.UserData;
+    D.No_Panel.Visible = 'on';
+    Fig.UserData = D;
+end
+
+function showEligibilityPage(Fig)
+    D = Fig.UserData;
+    D.P1.Visible = 'off';
+    D.P1_5.Visible = 'on';
+    D.P2.Visible = 'off';
+    Fig.UserData = D;
+end
+
+function showPage2(Fig)
+    D = Fig.UserData;
+    D.P1.Visible = 'off';
+    D.P1_5.Visible = 'off';
+    D.P2.Visible = 'on';
+    Fig.UserData = D;
+end
+
+function showPage1(Fig)
+    D = Fig.UserData;
+    D.P2.Visible = 'off';
+    D.P1_5.Visible = 'off';
+    D.P1.Visible = 'on';
+    Fig.UserData = D;
+end
+
+% VALIDATION - Now allows 0 dB
+function validateAndCheckAll(Fig, field, freqName)
+    D = Fig.UserData;
+    value = field.Value;
+    
+    field_idx = 0;
+    for k = 1:7
+        if D.Freq_Fields{k} == field
+            field_idx = k;
+            break;
+        end
+    end
+    
+    if field_idx == 0, return; end
+    
+    indicator = D.Freq_Indicators{field_idx};
+    
+    % Check if value is missing (NaN means not entered)
+    if isnan(value)
+        indicator.Text = '';  % No indicator
+        field.BackgroundColor = [1 1 1];  % White background
+        D.Fields_Filled(field_idx) = true;  % Consider it filled (as 0)
+        D.Fields_Valid(field_idx) = true;   % Valid (0 is normal hearing)
+        
+    % Accept 0 through 20 (0 is explicitly valid for normal hearing)
+    elseif value >= 0 && value <= 20
+        indicator.Text = '';  
+        field.BackgroundColor = [1 1 1];  
+        D.Fields_Filled(field_idx) = true;
+        D.Fields_Valid(field_idx) = true;
+        
+    else
+        indicator.Text = 'X';
+        indicator.FontColor = [0.8 0 0];
+        field.BackgroundColor = [1 0.95 0.95];
+        D.Fields_Filled(field_idx) = true;
+        D.Fields_Valid(field_idx) = false;
+        
+        fieldName = field.Tag;
+        if ~isfield(D.warned_fields, fieldName)
+            msg = sprintf(['Value Exceeds Study Limit\n\n' ...
+                'You entered: %.1f dB at %s\n' ...
+                'Maximum allowed: 20 dB\n\n' ...
+                'Please verify your audiogram values.'], value, freqName);
+            uialert(Fig, msg, 'Entry Exceeds Limit', 'Icon', 'warning');
+            D.warned_fields.(fieldName) = true;
+        end
+    end
+    
+    % Recompute all fields so untouched/blank entries remain valid as 0 dB.
+    for k = 1:7
+        current_value = D.Freq_Fields{k}.Value;
+        D.Fields_Filled(k) = true;
+        D.Fields_Valid(k) = isnan(current_value) || (current_value >= 0 && current_value <= 20);
+    end
+    
+    % Always enable Next button if all fields are valid (including empty = 0)
+    if all(D.Fields_Valid)
+        D.Next_Btn.Enable = 'on';
+        D.Validation_Note.Text = 'Ready to continue. (Empty fields = 0 dB = Normal hearing)';
+        D.Validation_Note.FontColor = [0.10, 0.48, 0.10];
+    else
+        D.Next_Btn.Enable = 'off';
+        D.Validation_Note.Text = 'Some values exceed 20 dB. Please correct.';
+        D.Validation_Note.FontColor = [0.7, 0.1, 0.1];
+    end
+    
+    Fig.UserData = D;
+end
+
+function collectAndLaunch(Fig)
+    D = Fig.UserData;
+    
+    audiogram_values = zeros(1, 7);
+    for k = 1:7
+        val = D.Freq_Fields{k}.Value;
+        % Treat empty (NaN) as 0 (normal hearing)
+        if isnan(val)
+            audiogram_values(k) = 0;
+        else
+            audiogram_values(k) = val;
+        end
+    end
+    
+    freq_names = {'125 Hz', '250 Hz', '500 Hz', '1 kHz', '2 kHz', '4 kHz', '8 kHz'};
+    
+    % ELIGIBILITY CHECK - No need to check for NaN anymore
+    max_value = max(audiogram_values);
+    
+    if max_value > 20
+        exceeding_idx = find(audiogram_values > 20);
+        
+        msg = sprintf('Study Eligibility Criteria Not Met\n\n');
+        msg = [msg 'The following frequencies exceed 20 dB HL:\n\n'];
+        
+        for i = 1:length(exceeding_idx)
+            idx = exceeding_idx(i);
+            msg = [msg sprintf('  - %s: %.1f dB\n', freq_names{idx}, audiogram_values(idx))];
+        end
+        
+        msg = [msg sprintf('\n\nThis study focuses on mild hearing loss only.\n')];
+        msg = [msg sprintf('We recommend consulting an audiologist.')];
+        
+        uialert(Fig, msg, 'Not Eligible', 'Icon', 'error');
+        logExclusion(Fig, audiogram_values, exceeding_idx);
+        return;
+    end
+    
+    % ELIGIBLE - Classify user group
+    if max_value < 10
+        user_group = 'Normal';
+        msg = sprintf('Eligibility Confirmed\n\n');
+        msg = [msg 'Group: Normal Listeners\n'];
+        msg = [msg sprintf('Max audiogram value: %.1f dB\n\n', max_value)];
+        msg = [msg 'You will complete a calibration test to\n'];
+        msg = [msg 'determine your starting difficulty level.'];
+    else
+        user_group = 'Adjusted';
+        msg = sprintf('Eligibility Confirmed\n\n');
+        msg = [msg 'Group: Adjusted Users\n'];
+        msg = [msg sprintf('Max audiogram value: %.1f dB\n\n', max_value)];
+        msg = [msg 'Audiogram compensation will be applied\n'];
+        msg = [msg 'and gradually reduced as you improve.'];
+    end
+    
+    uialert(Fig, msg, 'Eligible - Group Classified', 'Icon', 'success');
+    
+    Audiogram = struct();
+    for k = 1:7
+        Field_Name = sprintf('Hz_%d', D.Audiogram_Frequencies(k));
+        Audiogram.(Field_Name) = audiogram_values(k);
+    end
+    
+    logEnrollment(Fig, audiogram_values, user_group);
+    launchCalibration(Fig, Audiogram, user_group, max_value);
+end
+
+function logExclusion(Fig, values, exceeding)
+    try
+        D = Fig.UserData;
+        exclusion_path = fullfile(D.Project_Dir, 'study_exclusions.txt');
+        fid = fopen(exclusion_path, 'a');
+        if fid > 0
+            fprintf(fid, '\n----------------------------\n');
+            fprintf(fid, 'Date: %s\n', datestr(now));
+            fprintf(fid, 'Name: %s\n', D.Name_Field.Value);
+            fprintf(fid, 'Max: %.1f dB\n', max(values));
+            fclose(fid);
+        end
+    catch
+    end
+end
+
+function logEnrollment(Fig, values, user_group)
+    try
+        D = Fig.UserData;
+        enrollment_path = fullfile(D.Project_Dir, 'study_enrollments.txt');
+        fid = fopen(enrollment_path, 'a');
+        if fid > 0
+            fprintf(fid, '\n----------------------------\n');
+            fprintf(fid, 'Date: %s\n', datestr(now));
+            fprintf(fid, 'Name: %s\n', D.Name_Field.Value);
+            fprintf(fid, 'Group: %s\n', user_group);
+            fprintf(fid, 'Max: %.1f dB, Mean: %.1f dB\n', max(values), mean(values));
+            fprintf(fid, 'ELIGIBLE\n');
+            fclose(fid);
+        end
+    catch
+    end
+end
+
+function launchCalibration(Fig, Audiogram, user_group, max_audiogram_value)
+    % Pass to calibration system
+    
+    D = Fig.UserData;
+    User_Name = strtrim(D.Name_Field.Value);
+    if isempty(User_Name)
+        User_Name = 'unknown';
+    end
+    
+    fprintf('\n========================================\n');
+    fprintf('User Classification\n');
+    fprintf('========================================\n');
+    fprintf('Name: %s\n', User_Name);
+    fprintf('Group: %s\n', user_group);
+    fprintf('Max Audiogram: %.1f dB\n', max_audiogram_value);
+    fprintf('========================================\n\n');
+    fprintf('Launching calibration test...\n\n');
+    
+    session_data = struct();
+    session_data.User_Name = User_Name;
+    session_data.User_Group = user_group;
+    session_data.Max_Audiogram_Value = max_audiogram_value;
+    session_data.Audiogram = Audiogram;
+    session_data.Audiogram_Data = Audiogram;
+    session_data.Entry_Complete = true;
+    session_data.Calibration_Complete = false;
+    ATS_saveSessionData(session_data);
+    
+    % Also try assignin for compatibility
+    assignin('base', 'User_Name', User_Name);
+    assignin('base', 'User_Group', user_group);
+    assignin('base', 'Max_Audiogram_Value', max_audiogram_value);
+    assignin('base', 'Audiogram_Data', Audiogram);
+    
+    close(Fig);
+    
+    % Run critical listening introduction
+    ATS_CriticalListeningIntro(10, 'Step2_Calibration_10sec', '');
+end
+
+function launchMainProgram(Fig)
+    D = Fig.UserData;
+    User_Name = strtrim(D.Name_Field.Value);
+    if isempty(User_Name)
+        User_Name = 'QuickStart';
+    end
+
+    session_data = struct();
+    session_data.User_Name = User_Name;
+    session_data.User_Group = 'Normal';
+    session_data.Max_Audiogram_Value = 0;
+    session_data.Audiogram = struct('Hz_125', 0, 'Hz_250', 0, 'Hz_500', 0, ...
+        'Hz_1000', 0, 'Hz_2000', 0, 'Hz_4000', 0, 'Hz_8000', 0);
+    session_data.Audiogram_Data = session_data.Audiogram;
+    session_data.Entry_Complete = true;
+    session_data.Calibration_Complete = true;
+    session_data.Calibration_Boost_Level = 15;
+    session_data.Baseline_Audiogram = zeros(1, 8);
+    session_data.Audiogram_Gain_Percentage = 0.0;
+    ATS_saveSessionData(session_data);
+
+    assignin('base', 'User_Name', session_data.User_Name);
+    assignin('base', 'User_Group', session_data.User_Group);
+    assignin('base', 'Calibration_Boost_Level', session_data.Calibration_Boost_Level);
+    assignin('base', 'Calibration_Complete', true);
+    assignin('base', 'Baseline_Audiogram', session_data.Baseline_Audiogram);
+    assignin('base', 'Audiogram_Gain_Percentage', session_data.Audiogram_Gain_Percentage);
+
+    close(Fig);
+    Step3_Training_System_10sec;
+end
