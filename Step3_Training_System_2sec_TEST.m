@@ -12,14 +12,14 @@ clc; close all;
 Session_Data = ATS_loadSessionData();
 
 %%% Audio file paths ***
-Audio_Files{1} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\pop.wav'; 
-Audio_Files{2} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\classical.wav'; 
-Audio_Files{3} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\jazz.wav'; 
-Audio_Files{4} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\classic_rock.wav'; 
-Audio_Files{5} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\hip_hop.wav'; 
-Audio_Files{6} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\folk.wav'; 
-Audio_Files{7} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\classical_piano.wav'; 
-Audio_Files{8} = 'C:\Users\Natha\OneDrive\Documents\MATLAB\Analog Circuits\3_24_26 Script\latin.wav';
+Audio_Files{1} = '/.pop.wav'; 
+Audio_Files{2} = '/.classical.wav'; 
+Audio_Files{3} = '/.jazz.wav'; 
+Audio_Files{4} = '/.classic_rock.wav'; 
+Audio_Files{5} = '/.hip_hop.wav'; 
+Audio_Files{6} = '/.folk.wav'; 
+Audio_Files{7} = '/.classical_piano.wav'; 
+Audio_Files{8} = '/.latin.wav';
 
 Genre_Labels = {'Pop', 'Orchestral', 'Jazz', 'Classic Rock', 'Hip Hop', 'Folk', 'Classical Piano', 'Latin'};
 
