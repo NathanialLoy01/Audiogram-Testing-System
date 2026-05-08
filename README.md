@@ -1,7 +1,5 @@
 # Audiogram-Testing-System
 
-# Auditory Training System
-
 MATLAB-based auditory training software for critical listening practice, calibration, and hearing-profile-aware support.
 
 ## Overview
